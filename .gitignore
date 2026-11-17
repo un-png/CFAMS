@@ -22,3 +22,15 @@
 # virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
 hs_err_pid*
 replay_pid*
+
+# CFAMS local artifacts and credentials
+**/target/
+**/node_modules/
+**/dist/
+**/.idea/
+**/logs/
+**/uploads/
+**/*.log
+**/.env.local
+**/.env.*.local
+**/application-local.yml
