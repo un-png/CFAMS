@@ -4,16 +4,16 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
 	<modelVersion>4.0.0</modelVersion>
 	
-    <groupId>com.ruoyi</groupId>
-    <artifactId>ruoyi</artifactId>
+    <groupId>com.cfams</groupId>
+    <artifactId>cfams</artifactId>
     <version>3.9.2</version>
 
-    <name>CFAMS</name>
+    <name>cfams</name>
     <url>https://github.com/un-png/CFAMS</url>  
     <description>校园固定资产管理系统</description>
     
     <properties>
-        <ruoyi.version>3.9.2</ruoyi.version>
+        <cfams.version>3.9.2</cfams.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
         <java.version>21</java.version>
@@ -99,13 +99,6 @@
                 <version>${poi.version}</version>
             </dependency>
 
-            <!-- velocity代码生成使用模板 -->
-            <dependency>
-                <groupId>org.apache.velocity</groupId>
-                <artifactId>velocity-engine-core</artifactId>
-                <version>${velocity.version}</version>
-            </dependency>
-
             <!-- 阿里JSON解析器 -->
             <dependency>
                 <groupId>com.alibaba.fastjson2</groupId>
@@ -143,33 +136,47 @@
 
             <!-- 核心模块-->
             <dependency>
-                <groupId>com.ruoyi</groupId>
-                <artifactId>ruoyi-framework</artifactId>
-                <version>${ruoyi.version}</version>
+                <groupId>com.cfams</groupId>
+                <artifactId>cfams-framework</artifactId>
+                <version>${cfams.version}</version>
             </dependency>
 
             <!-- 系统模块-->
             <dependency>
-                <groupId>com.ruoyi</groupId>
-                <artifactId>ruoyi-system</artifactId>
-                <version>${ruoyi.version}</version>
+                <groupId>com.cfams</groupId>
+                <artifactId>cfams-system</artifactId>
+                <version>${cfams.version}</version>
             </dependency>
 
             <!-- 通用工具-->
             <dependency>
-                <groupId>com.ruoyi</groupId>
-                <artifactId>ruoyi-common</artifactId>
-                <version>${ruoyi.version}</version>
+                <groupId>com.cfams</groupId>
+                <artifactId>cfams-common</artifactId>
+                <version>${cfams.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>com.cfams</groupId>
+                <artifactId>cfams-pc</artifactId>
+                <version>${cfams.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>com.cfams</groupId>
+                <artifactId>cfams-app</artifactId>
+                <version>${cfams.version}</version>
             </dependency>
 
         </dependencies>
     </dependencyManagement>
 
     <modules>
-        <module>ruoyi-admin</module>
-        <module>ruoyi-framework</module>
-        <module>ruoyi-system</module>
-        <module>ruoyi-common</module>
+        <module>cfams-admin</module>
+        <module>cfams-framework</module>
+        <module>cfams-system</module>
+        <module>cfams-common</module>
+        <module>cfams-pc</module>
+        <module>cfams-app</module>
     </modules>
     <packaging>pom</packaging>
 

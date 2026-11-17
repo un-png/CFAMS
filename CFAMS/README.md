@@ -1,5 +1,9 @@
 # CFAMS
 
+当前后端使用JDK 21，Maven父工程为`com.cfams:cfams`。模块统一命名为`cfams-admin`、`cfams-common`、`cfams-framework`、`cfams-system`、`cfams-pc`、`cfams-app`，基础包为`com.cfams`。以`com.cfams.CfamsApplication`启动，构建产物为`cfams-admin/target/cfams-admin.jar`。
+
+PC和小程序的功能包都直接位于各自模块的`com.cfams`下，按业务包内的`controller`、`domain/dto`、`domain/vo`、`mapper`、`service/impl`组织代码。PC已建立11个功能包，小程序已建立9个功能包，均只有`package-info.java`占位文件，尚未实现校园业务接口。两端具体类需采用不同类名，避免同一后端中全限定类名冲突。完整项目结构及开发方式见仓库根目录README；以下保留若依来源说明。
+
 
 <p align="center">
 	<img alt="logo" src="https://oscimg.oschina.net/oscnet/up-d3d0a9303e11d522a06cd263f3079027715.png">

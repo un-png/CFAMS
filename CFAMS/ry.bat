@@ -1,10 +1,10 @@
 @echo off
 
 rem jar平级目录
-set AppName=ruoyi-admin.jar
+set AppName=cfams-admin.jar
 
 rem JVM参数
-set JVM_OPTS="-Dname=%AppName%  -Duser.timezone=Asia/Shanghai -Xms512m -Xmx1024m -XX:MetaspaceSize=128m -XX:MaxMetaspaceSize=512m -XX:+HeapDumpOnOutOfMemoryError -XX:+PrintGCDateStamps  -XX:+PrintGCDetails -XX:NewRatio=1 -XX:SurvivorRatio=30 -XX:+UseParallelGC -XX:+UseParallelOldGC"
+set "JVM_OPTS=-Dname=%AppName%  -Duser.timezone=Asia/Shanghai -Xms512m -Xmx1024m -XX:MetaspaceSize=128m -XX:MaxMetaspaceSize=512m -XX:+HeapDumpOnOutOfMemoryError -Xlog:gc* -XX:NewRatio=1 -XX:SurvivorRatio=30 -XX:+UseParallelGC"
 
 
 ECHO.
@@ -33,7 +33,7 @@ PAUSE
 		PAUSE
 	)
 
-start javaw %JVM_OPTS% -jar %AppName%
+start "" javaw %JVM_OPTS% -jar "%AppName%"
 
 echo  starting……
 echo  Start %AppName% success...
