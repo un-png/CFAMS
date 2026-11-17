@@ -24,6 +24,7 @@ target/
 *.iws
 *.iml
 *.ipr
+*.yml
 
 ### JRebel ###
 rebel.xml
@@ -45,3 +46,5 @@ nbdist/
 !*/build/*.java
 !*/build/*.html
 !*/build/*.xml
+
+
