@@ -20,11 +20,26 @@
 
 ## 分支约定
 
-- master：可运行的集成版本，所有端代码都在这里。
-- dev-server：后端开发，主要修改CFAMS目录。
-- dev-web：PC前端开发，主要修改CFAMS-web目录。
-- dev-app：小程序开发。
+- `dev`：唯一的日常开发分支，统一跟踪和提交后端、PC前端及后续小程序代码。
+- `master`：保留可运行的稳定版本，功能验证通过后从 `dev` 合并。
 
-分支都是完整仓库快照，不是分别只存某一端代码。开始工作先拉取自己的开发分支并合并origin/master；完成一个可验证功能后提交、推送开发分支，创建PR合并到master。合并后其他开发分支再次同步master。不对共享分支强制推送。
+前后端共用仓库根目录的一个 `.git`，所有代码都在同一个 `dev` 分支中维护，不再使用 `dev-server`、`dev-web`、`dev-app`。
 
-现有dev分支暂未自动更新；首次开始开发时将本次master提交合并到对应dev分支。
+本机统一工作目录为 `E:\毕业设计\CFAMS-repository`。后续修改该目录下的项目，不从旧的独立项目目录向此仓库推送。
+
+日常在仓库根目录执行：
+
+```bash
+git switch dev
+git pull --ff-only
+# 修改代码并完成相关编译、测试后：
+git status
+git add .
+git diff --cached --stat
+git commit -m "feat: 实现资产分类管理"
+git push
+```
+
+本地 `dev` 跟踪 `origin/dev`。提交前检查暂存文件，真实连接凭据、构建输出和本地环境配置不提交。前后端可以在同一次提交中完成配套修改。
+
+阶段功能验证通过后创建 `dev → master` 的 Pull Request。合并后继续在 `dev` 开发；需要同步稳定分支上的新提交时，先保存当前修改，再执行 `git fetch origin`、`git merge origin/master`、`git push`。不对共享分支强制推送。
