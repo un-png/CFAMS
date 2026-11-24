@@ -44,7 +44,7 @@ const visibleNumber = ref(null)
 // 当前激活菜单的 index
 const currentIndex = ref(null)
 // 隐藏侧边栏路由
-const hideList = ['/index', '/user/profile']
+const hideList = ['/', '/user/profile']
 
 const appStore = useAppStore()
 const settingsStore = useSettingsStore()
@@ -101,7 +101,10 @@ const activeMenu = computed(() => {
   if (path !== undefined && path.lastIndexOf("/") > 0 && hideList.indexOf(path) === -1) {
     const tmpPath = path.substring(1, path.length)
     if (!route.meta.link) {
-      activePath = "/" + tmpPath.substring(0, tmpPath.indexOf("/"))
+      const parentMenu = routers.value
+        .filter(menu => path === menu.path || path.startsWith(menu.path + '/'))
+        .sort((a, b) => b.path.length - a.path.length)[0]
+      activePath = parentMenu?.path || "/" + tmpPath.substring(0, tmpPath.indexOf("/"))
       appStore.toggleSideBarHide(false)
     }
   } else if(!route.children) {

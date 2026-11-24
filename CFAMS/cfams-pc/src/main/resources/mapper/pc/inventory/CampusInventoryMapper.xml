@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.cfams.inventory.mapper.CampusInventoryMapper">
+    <sql id="taskColumns">
+        t.task_id AS taskId,t.task_no AS taskNo,t.task_name AS taskName,t.dept_id AS deptId,
+        t.scope_dept_id AS scopeDeptId,t.scope_location_id AS scopeLocationId,t.scope_category_id AS scopeCategoryId,
+        t.start_time AS startTime,t.end_time AS endTime,t.status,t.publisher_user_id AS publisherUserId,
+        t.publish_time AS publishTime,t.submit_time AS submitTime,t.complete_user_id AS completeUserId,
+        t.complete_time AS completeTime,t.create_by AS createBy,t.create_time AS createTime,
+        t.update_time AS updateTime,t.remark
+    </sql>
+    <sql id="scope">
+        AND (#{unrestricted}=TRUE
+        <if test="allowedDeptIds != null and !allowedDeptIds.isEmpty()">
+            OR t.dept_id IN <foreach collection="allowedDeptIds" item="dept" open="(" separator="," close=")">#{dept}</foreach>
+        </if>
+        OR t.publisher_user_id=#{selfUserId})
+    </sql>
+    <select id="list" resultType="com.cfams.inventory.domain.vo.InventoryTaskVO">
+        SELECT <include refid="taskColumns"/>, d.dept_name AS deptName,
+          (SELECT COUNT(*) FROM ca_inventory_item i WHERE i.task_id=t.task_id) AS totalCount,
+          (SELECT COUNT(*) FROM ca_inventory_item i WHERE i.task_id=t.task_id AND i.checked_time IS NOT NULL) AS checkedCount,
+          (SELECT COUNT(*) FROM ca_inventory_item i WHERE i.task_id=t.task_id AND i.review_status='1') AS reviewedCount
+        FROM ca_inventory_task t LEFT JOIN sys_dept d ON d.dept_id=t.dept_id
+        WHERE 1=1 <include refid="scope"/>
+        <if test="keyword != null and keyword != ''">
+            AND (t.task_no LIKE CONCAT('%',#{keyword},'%') OR t.task_name LIKE CONCAT('%',#{keyword},'%'))
+        </if>
+        <if test="status != null and status != ''">AND t.status=#{status}</if>
+        <if test="deptId != null">AND t.dept_id=#{deptId}</if>
+        <if test="beginTime != null">AND t.start_time &gt;= #{beginTime}</if>
+        <if test="endTime != null">AND t.end_time &lt;= #{endTime}</if>
+        ORDER BY t.task_id DESC
+    </select>
+    <select id="detail" resultType="com.cfams.inventory.domain.vo.InventoryTaskVO">
+        SELECT <include refid="taskColumns"/>, d.dept_name AS deptName,
+          (SELECT COUNT(*) FROM ca_inventory_item i WHERE i.task_id=t.task_id) AS totalCount,
+          (SELECT COUNT(*) FROM ca_inventory_item i WHERE i.task_id=t.task_id AND i.checked_time IS NOT NULL) AS checkedCount,
+          (SELECT COUNT(*) FROM ca_inventory_item i WHERE i.task_id=t.task_id AND i.review_status='1') AS reviewedCount
+        FROM ca_inventory_task t LEFT JOIN sys_dept d ON d.dept_id=t.dept_id WHERE t.task_id=#{id}
+    </select>
+    <select id="qualifiedUser" resultType="int">
+        SELECT COUNT(*) FROM sys_user u
+        WHERE u.user_id=#{userId} AND u.status='0' AND u.del_flag='0'
+        AND EXISTS (
+            SELECT 1 FROM sys_user_role ur JOIN sys_role r ON r.role_id=ur.role_id
+            JOIN sys_role_menu rm ON rm.role_id=r.role_id JOIN sys_menu m ON m.menu_id=rm.menu_id
+            WHERE ur.user_id=u.user_id AND r.status='0' AND r.del_flag='0' AND m.status='0'
+              AND m.perms IN ('campus:inventory:execute','*:*:*')
+        )
+    </select>
+    <select id="validScope" resultType="int">
+        SELECT CASE WHEN
+        (#{deptId} IS NULL OR EXISTS(SELECT 1 FROM sys_dept WHERE dept_id=#{deptId} AND status='0' AND del_flag='0'))
+        AND (#{locationId} IS NULL OR EXISTS(SELECT 1 FROM ca_location WHERE location_id=#{locationId} AND status='0'))
+        AND (#{categoryId} IS NULL OR EXISTS(SELECT 1 FROM ca_category WHERE category_id=#{categoryId} AND status='0'))
+        THEN 1 ELSE 0 END
+    </select>
+    <select id="candidates" resultType="com.cfams.inventory.domain.vo.InventoryAssetVO">
+        WITH RECURSIVE locations AS (
+            SELECT location_id FROM ca_location WHERE location_id=#{task.scopeLocationId}
+            UNION DISTINCT SELECT c.location_id FROM ca_location c JOIN locations p ON c.parent_id=p.location_id
+        ), categories AS (
+            SELECT category_id FROM ca_category WHERE category_id=#{task.scopeCategoryId}
+            UNION DISTINCT SELECT c.category_id FROM ca_category c JOIN categories p ON c.parent_id=p.category_id
+        )
+        SELECT a.asset_id AS assetId,a.asset_code AS assetCode,a.asset_name AS assetName,
+               a.dept_id AS deptId,a.location_id AS locationId,a.category_id AS categoryId,a.keeper_user_id AS keeperUserId
+        FROM ca_asset a JOIN sys_dept d ON d.dept_id=a.dept_id WHERE a.asset_status != '3'
+        <if test="task.scopeDeptId != null">
+            AND (d.dept_id=#{task.scopeDeptId} OR FIND_IN_SET(#{task.scopeDeptId},d.ancestors))
+        </if>
+        <if test="task.scopeLocationId != null">AND a.location_id IN (SELECT location_id FROM locations)</if>
+        <if test="task.scopeCategoryId != null">AND a.category_id IN (SELECT category_id FROM categories)</if>
+        AND (#{q.unrestricted}=TRUE
+        <if test="q.allowedDeptIds != null and !q.allowedDeptIds.isEmpty()">
+            OR a.dept_id IN <foreach collection="q.allowedDeptIds" item="dept" open="(" separator="," close=")">#{dept}</foreach>
+        </if>
+        OR a.keeper_user_id=#{q.selfUserId})
+        ORDER BY a.asset_id
+    </select>
+    <update id="transition">
+        UPDATE ca_inventory_task SET status=#{status},update_by=#{operator},update_time=NOW(3),
+          submit_time=CASE WHEN #{status}='2' THEN NOW(3) ELSE submit_time END,
+          complete_time=CASE WHEN #{status}='3' THEN NOW(3) ELSE complete_time END,
+          complete_user_id=CASE WHEN #{status}='3' THEN #{userId} ELSE complete_user_id END
+        WHERE task_id=#{id} AND status=#{expected} AND publish_time IS NOT NULL
+    </update>
+    <sql id="itemColumns">
+        i.item_id AS itemId,i.task_id AS taskId,i.asset_id AS assetId,i.assigned_user_id AS assignedUserId,
+        i.base_snapshot AS baseSnapshot,i.scan_time AS scanTime,i.checked_user_id AS checkedUserId,
+        i.checked_time AS checkedTime,i.observed_location_id AS observedLocationId,
+        i.observed_condition AS observedCondition,i.missing_flag AS missingFlag,i.check_note AS checkNote,
+        i.review_status AS reviewStatus,i.review_user_id AS reviewUserId,i.review_time AS reviewTime,
+        i.review_note AS reviewNote,i.review_snapshot AS reviewSnapshot,i.resolved_location_id AS resolvedLocationId,
+        i.resolved_condition AS resolvedCondition,i.repair_id AS repairId,i.scrap_id AS scrapId
+    </sql>
+    <select id="items" resultType="com.cfams.inventory.domain.vo.InventoryItemVO">
+        SELECT <include refid="itemColumns"/>,a.asset_code AS assetCode,a.asset_name AS assetName,
+               u.nick_name AS assignedUserName
+        FROM ca_inventory_item i JOIN ca_inventory_task t ON t.task_id=i.task_id
+        JOIN ca_asset a ON a.asset_id=i.asset_id LEFT JOIN sys_user u ON u.user_id=i.assigned_user_id
+        WHERE 1=1 <include refid="scope"/>
+        <if test="taskId != null">AND i.task_id=#{taskId}</if>
+        <if test="reviewStatus != null and reviewStatus != ''">AND i.review_status=#{reviewStatus}</if>
+          <if test="difference == 'unseen'">AND i.checked_time IS NULL</if>
+          <if test="difference == 'missing'">AND i.checked_time IS NOT NULL AND i.missing_flag='1'</if>
+          <if test="difference == 'damaged'">AND i.checked_time IS NOT NULL AND i.observed_condition='1'</if>
+          <if test="difference == 'moved'">AND i.checked_time IS NOT NULL AND i.observed_location_id != CAST(JSON_UNQUOTE(JSON_EXTRACT(i.base_snapshot,'$.location_id')) AS UNSIGNED)</if>
+        <if test="status != null and status != ''">AND t.status=#{status}</if>
+        <if test="deptId != null">AND t.dept_id=#{deptId}</if>
+        <if test="keyword != null and keyword != ''">
+            AND (a.asset_code LIKE CONCAT('%',#{keyword},'%') OR a.asset_name LIKE CONCAT('%',#{keyword},'%'))
+        </if>
+        ORDER BY i.task_id DESC,i.item_id
+    </select>
+    <select id="changedSincePublish" resultType="int">
+        SELECT COUNT(*) FROM ca_asset_history h JOIN ca_inventory_task t ON t.task_id=#{taskId}
+        WHERE h.asset_id=#{assetId} AND h.event_time &gt;= t.publish_time 
+    </select>
+    <update id="updateAsset">
+        UPDATE ca_asset SET location_id=COALESCE(#{locationId},location_id),
+            condition_status=COALESCE(#{condition},condition_status),
+            borrow_enabled=CASE WHEN #{condition} IN ('1','2') THEN '0' ELSE borrow_enabled END,
+            update_by=#{operator},update_time=NOW(3)
+        WHERE asset_id=#{assetId} AND asset_status != '3'
+    </update>
+</mapper>

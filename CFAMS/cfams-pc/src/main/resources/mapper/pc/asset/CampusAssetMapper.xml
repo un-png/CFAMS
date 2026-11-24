@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.cfams.asset.mapper.CampusAssetMapper">
+    <sql id="categoryFields">
+        category_id AS categoryId, parent_id AS parentId, category_code AS categoryCode,
+        category_name AS categoryName, order_num AS orderNum, status, remark
+    </sql>
+    <sql id="locationFields">
+        location_id AS locationId, parent_id AS parentId, location_code AS locationCode,
+        location_name AS locationName, location_type AS locationType, dept_id AS deptId,
+        order_num AS orderNum, status, remark
+    </sql>
+    <select id="categories" resultType="com.cfams.asset.domain.vo.CategoryVO">
+        SELECT <include refid="categoryFields"/> FROM ca_category
+        <where>
+            <if test="keyword != null and keyword != ''">
+                AND (category_code LIKE CONCAT('%', #{keyword}, '%') OR category_name LIKE CONCAT('%', #{keyword}, '%'))
+            </if>
+            <if test="status != null and status != ''">AND status = #{status}</if>
+        </where>
+        ORDER BY order_num, category_id
+    </select>
+    <select id="locations" resultType="com.cfams.asset.domain.vo.LocationVO">
+        SELECT <include refid="locationFields"/> FROM ca_location
+        <where>
+            AND (
+                <choose>
+                    <when test="unrestricted">1=1</when>
+                    <otherwise>
+                        1=0
+                        <if test="allowedDeptIds != null and allowedDeptIds.size() > 0">
+                            OR dept_id IN
+                            <foreach collection="allowedDeptIds" item="dept" open="(" separator="," close=")">#{dept}</foreach>
+                        </if>
+                    </otherwise>
+                </choose>
+            )
+            <if test="keyword != null and keyword != ''">
+                AND (location_code LIKE CONCAT('%', #{keyword}, '%') OR location_name LIKE CONCAT('%', #{keyword}, '%'))
+            </if>
+            <if test="status != null and status != ''">AND status=#{status}</if>
+            <if test="deptId != null">AND dept_id=#{deptId}</if>
+            <if test="locationType != null and locationType != ''">AND location_type=#{locationType}</if>
+        </where>
+        ORDER BY order_num, location_id
+    </select>
+<sql id="assetFields">
+        a.asset_id AS assetId, a.asset_code AS assetCode, a.asset_name AS assetName,
+        a.category_id AS categoryId, a.specification, a.purchase_date AS purchaseDate,
+        a.purchase_price AS purchasePrice, a.supplier_name AS supplierName,
+        a.expected_use_years AS expectedUseYears, a.registered_time AS registeredTime,
+        a.dept_id AS deptId, a.location_id AS locationId, a.keeper_user_id AS keeperUserId,
+        a.asset_status AS assetStatus, a.condition_status AS conditionStatus,
+        a.borrow_enabled AS borrowEnabled, a.visibility, a.qr_token AS qrToken,
+        a.scrapped_time AS scrappedTime, a.remark,
+        c.category_name AS categoryName, l.location_name AS locationName,
+        d.dept_name AS deptName, u.nick_name AS keeperName
+    </sql>
+    <sql id="assetFrom">
+        FROM ca_asset a
+        LEFT JOIN ca_category c ON c.category_id=a.category_id
+        LEFT JOIN ca_location l ON l.location_id=a.location_id
+        LEFT JOIN sys_dept d ON d.dept_id=a.dept_id
+        LEFT JOIN sys_user u ON u.user_id=a.keeper_user_id
+    </sql>
+    <select id="assets" resultType="com.cfams.asset.domain.vo.AssetVO">
+        SELECT <include refid="assetFields"/> <include refid="assetFrom"/>
+        <where>
+            AND (
+                <choose>
+                    <when test="unrestricted">1=1</when>
+                    <otherwise>
+                        1=0
+                        <if test="allowedDeptIds != null and allowedDeptIds.size() > 0">
+                            OR a.dept_id IN
+                            <foreach collection="allowedDeptIds" item="dept" open="(" separator="," close=")">#{dept}</foreach>
+                        </if>
+                        <if test="selfUserId != null">OR a.keeper_user_id=#{selfUserId}</if>
+                    </otherwise>
+                </choose>
+            )
+            <if test="keyword != null and keyword != ''">
+                AND (a.asset_code LIKE CONCAT('%', #{keyword}, '%') OR a.asset_name LIKE CONCAT('%', #{keyword}, '%'))
+            </if>
+            <if test="status != null and status != ''">AND a.asset_status=#{status}</if>
+            <if test="conditionStatus != null and conditionStatus != ''">AND a.condition_status=#{conditionStatus}</if>
+            <if test="deptId != null">AND a.dept_id=#{deptId}</if>
+            <if test="categoryId != null">AND a.category_id=#{categoryId}</if>
+            <if test="locationId != null">AND a.location_id=#{locationId}</if>
+            <if test="beginTime != null">AND a.registered_time &gt;= #{beginTime}</if>
+            <if test="endTime != null">AND a.registered_time &lt;= #{endTime}</if>
+        </where>
+        ORDER BY a.asset_id DESC
+    </select>
+    <select id="asset" resultType="com.cfams.asset.domain.vo.AssetVO">
+        SELECT <include refid="assetFields"/> <include refid="assetFrom"/> WHERE a.asset_id=#{id}
+    </select>
+    <select id="assetByToken" resultType="com.cfams.asset.domain.vo.AssetVO">
+        SELECT <include refid="assetFields"/> <include refid="assetFrom"/> WHERE a.qr_token=#{token}
+    </select>
+    <select id="pendingBusiness" resultType="int">
+        SELECT
+        (SELECT COUNT(1) FROM ca_borrow WHERE asset_id=#{id} AND status IN ('0','2','3','4')) +
+        (SELECT COUNT(1) FROM ca_repair WHERE asset_id=#{id} AND status IN ('0','1','2','3')) +
+        (SELECT COUNT(1) FROM ca_scrap WHERE asset_id=#{id} AND status IN ('0','1'))
+    </select>
+    <select id="snapshot" resultType="string">
+        SELECT JSON_OBJECT(
+        'asset_id',CAST(a.asset_id AS CHAR),'asset_code',a.asset_code,'asset_name',a.asset_name,
+        'category_id',CAST(a.category_id AS CHAR),'category_name',c.category_name,
+        'dept_id',CAST(a.dept_id AS CHAR),'dept_name',d.dept_name,
+        'location_id',CAST(a.location_id AS CHAR),'location_name',l.location_name,
+        'keeper_user_id',CAST(a.keeper_user_id AS CHAR),'keeper_name',u.nick_name,
+        'specification',a.specification,'purchase_price',CAST(a.purchase_price AS CHAR),
+        'purchase_date',a.purchase_date,'registered_time',a.registered_time,'scrapped_time',a.scrapped_time,
+        'asset_status',a.asset_status,'condition_status',a.condition_status,
+        'borrow_enabled',a.borrow_enabled,'visibility',a.visibility)
+        FROM ca_asset a LEFT JOIN ca_category c ON c.category_id=a.category_id
+        LEFT JOIN sys_dept d ON d.dept_id=a.dept_id LEFT JOIN ca_location l ON l.location_id=a.location_id
+        LEFT JOIN sys_user u ON u.user_id=a.keeper_user_id WHERE a.asset_id=#{id}
+    </select>
+    <update id="changeState">
+        UPDATE ca_asset SET asset_status=#{status},condition_status=#{condition},
+        scrapped_time=CASE WHEN #{status}='3' THEN NOW(3) ELSE scrapped_time END,
+        update_by=#{operator},update_time=NOW(3)
+        WHERE asset_id=#{id} AND asset_status=#{expected}
+    </update>
+</mapper>

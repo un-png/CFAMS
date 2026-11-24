@@ -13,7 +13,7 @@
         <ul class="list-unstyled">
           <li class="link-type">
             <router-link to="/">
-              回首页
+              返回系统
             </router-link>
           </li>
         </ul>

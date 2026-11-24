@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.cfams.campus.mapper.CampusAccessMapper">
+    <select id="activeRoles" resultType="com.cfams.common.core.domain.entity.SysRole">
+        SELECT r.role_id AS roleId,r.data_scope AS dataScope
+        FROM sys_role r JOIN sys_user_role ur ON r.role_id=ur.role_id
+        WHERE ur.user_id=#{userId} AND r.status='0' AND r.del_flag='0'
+        <if test="permissions != null and permissions.size() > 0">
+            AND EXISTS (SELECT 1 FROM sys_role_menu rm JOIN sys_menu m ON m.menu_id=rm.menu_id
+            WHERE rm.role_id=r.role_id AND m.status='0' AND m.perms IN
+            <foreach collection="permissions" item="permission" open="(" close=")" separator=",">#{permission}</foreach>)
+        </if>
+    </select>
+    <select id="activePermissions" resultType="string">
+        SELECT DISTINCT m.perms FROM sys_menu m
+        JOIN sys_role_menu rm ON rm.menu_id=m.menu_id
+        JOIN sys_role r ON r.role_id=rm.role_id
+        JOIN sys_user_role ur ON ur.role_id=r.role_id
+        WHERE ur.user_id=#{userId} AND m.status='0' AND r.status='0' AND r.del_flag='0'
+    </select>
+</mapper>

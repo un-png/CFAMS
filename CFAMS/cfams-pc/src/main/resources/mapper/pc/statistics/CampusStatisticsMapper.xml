@@ -1,0 +1,175 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.cfams.statistics.mapper.CampusStatisticsMapper">
+    <!-- x统一承载每类业务自己的部门和所有者；空权限范围恒假。 -->
+    <sql id="scope">
+        AND (1=0
+        <if test="unrestricted">OR 1=1</if>
+        <if test="allowedDeptIds != null and allowedDeptIds.size() > 0">
+            OR x.dept_id IN <foreach collection="allowedDeptIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+        </if>
+        <if test="selfUserId != null">OR x.owner_id=#{selfUserId}</if>)
+        <if test="deptId != null">AND x.dept_id=#{deptId}</if>
+    </sql>
+    <sql id="assetFilters">
+        <if test="categoryId != null">AND x.category_id=#{categoryId}</if>
+        <if test="locationId != null">AND x.location_id=#{locationId}</if>
+        <if test="minUseYears != null">AND TIMESTAMPDIFF(YEAR,x.purchase_date,CURDATE()) &gt;= #{minUseYears}</if>
+        <if test="maxUseYears != null">AND TIMESTAMPDIFF(YEAR,x.purchase_date,CURDATE()) &lt;= #{maxUseYears}</if>
+    </sql>
+    <sql id="stockSource">
+        (SELECT a.dept_id,a.keeper_user_id owner_id,a.category_id,a.location_id,a.purchase_date,
+        a.asset_status,a.purchase_price FROM ca_asset a WHERE a.asset_status!='3') x
+    </sql>
+    <select id="stock" resultType="com.cfams.statistics.domain.vo.StockVO">
+        SELECT COUNT(*) assetCount,COALESCE(SUM(x.purchase_price),0) registeredValue,
+        COALESCE(SUM(x.asset_status='1'),0) borrowedCount,
+        COALESCE(SUM(x.asset_status='2'),0) repairingCount
+        FROM <include refid="stockSource"/> WHERE 1=1
+        <include refid="scope"/><include refid="assetFilters"/>
+    </select>
+    <select id="categories" resultType="com.cfams.statistics.domain.vo.DistributionVO">
+        SELECT x.category_id id,COALESCE(c.category_name,'未找到类别') name,COUNT(*) count,
+        COALESCE(SUM(x.purchase_price),0) value FROM <include refid="stockSource"/>
+        LEFT JOIN ca_category c ON c.category_id=x.category_id WHERE 1=1
+        <include refid="scope"/><include refid="assetFilters"/>
+        GROUP BY x.category_id,c.category_name ORDER BY count DESC,id
+    </select>
+    <select id="departments" resultType="com.cfams.statistics.domain.vo.DistributionVO">
+        SELECT x.dept_id id,COALESCE(d.dept_name,'未找到部门') name,COUNT(*) count,
+        COALESCE(SUM(x.purchase_price),0) value FROM <include refid="stockSource"/>
+        LEFT JOIN sys_dept d ON d.dept_id=x.dept_id WHERE 1=1
+        <include refid="scope"/><include refid="assetFilters"/>
+        GROUP BY x.dept_id,d.dept_name ORDER BY count DESC,id
+    </select>
+    <select id="pending" resultType="com.cfams.statistics.domain.vo.PendingVO">
+        SELECT COALESCE(SUM(x.kind='BORROW'),0) borrowAudit,
+        COALESCE(SUM(x.kind='PICKUP'),0) pickupHandover,
+        COALESCE(SUM(x.kind='RETURN'),0) returnHandover,
+        COALESCE(SUM(x.kind='ACCEPT'),0) repairAcceptance,
+        COALESCE(SUM(x.kind='VERIFY'),0) repairVerification,
+        COALESCE(SUM(x.kind='INVENTORY'),0) inventoryReview,
+        COALESCE(SUM(x.kind='SCRAP'),0) scrapAudit FROM (
+            SELECT b.asset_dept_id dept_id,b.applicant_user_id owner_id,'BORROW' kind,
+            a.category_id,a.location_id,a.purchase_date,'campus:borrow:audit' permission
+            FROM ca_borrow b JOIN ca_asset a ON a.asset_id=b.asset_id WHERE b.status='0'
+            UNION ALL
+            SELECT b.asset_dept_id,b.applicant_user_id,CASE WHEN h.handover_type='1' THEN 'PICKUP' ELSE 'RETURN' END,
+            a.category_id,a.location_id,a.purchase_date,'campus:handover:confirm' FROM ca_handover h
+            JOIN ca_borrow b ON b.borrow_id=h.borrow_id JOIN ca_asset a ON a.asset_id=b.asset_id WHERE h.status='0'
+            UNION ALL
+            SELECT r.asset_dept_id,r.reporter_user_id,CASE WHEN r.status='0' THEN 'ACCEPT' ELSE 'VERIFY' END,
+            a.category_id,a.location_id,a.purchase_date,
+            CASE WHEN r.status='0' THEN 'campus:repairs:assign' ELSE 'campus:repairVerify:verify' END
+            FROM ca_repair r JOIN ca_asset a ON a.asset_id=r.asset_id WHERE r.status IN ('0','3')
+            UNION ALL
+            SELECT t.dept_id,t.publisher_user_id,'INVENTORY',NULL,NULL,NULL,'campus:inventoryReview:review'
+            FROM ca_inventory_task t WHERE t.status='2'
+            UNION ALL
+            SELECT s.asset_dept_id,s.applicant_user_id,'SCRAP',a.category_id,a.location_id,a.purchase_date,
+            CASE WHEN s.status='0' THEN 'campus:scrapAudit:firstAudit' ELSE 'campus:scrapAudit:finalAudit' END
+            FROM ca_scrap s JOIN ca_asset a ON a.asset_id=s.asset_id WHERE s.status IN ('0','1')
+            AND s.applicant_user_id != #{pendingUserId}
+            AND NOT EXISTS(SELECT 1 FROM ca_scrap_audit sa WHERE sa.scrap_id=s.scrap_id AND sa.auditor_user_id=#{pendingUserId})
+        ) x WHERE 1=1 <include refid="scope"/>
+        AND (x.kind='INVENTORY' OR (1=1 <include refid="assetFilters"/>))
+        <if test="!pendingAdmin">
+            AND EXISTS (
+                SELECT 1 FROM sys_user actor
+                JOIN sys_user_role ur ON ur.user_id=actor.user_id
+                JOIN sys_role r ON r.role_id=ur.role_id
+                JOIN sys_role_menu rm ON rm.role_id=r.role_id
+                JOIN sys_menu m ON m.menu_id=rm.menu_id
+                WHERE actor.user_id=#{pendingUserId} AND actor.status='0' AND actor.del_flag='0'
+                AND r.status='0' AND r.del_flag='0' AND m.status='0' AND m.perms=x.permission
+                AND (r.data_scope='1'
+                OR (r.data_scope='2' AND EXISTS(SELECT 1 FROM sys_role_dept rd WHERE rd.role_id=r.role_id AND rd.dept_id=x.dept_id))
+                OR (r.data_scope='3' AND x.dept_id=actor.dept_id)
+                OR (r.data_scope='4' AND EXISTS(SELECT 1 FROM sys_dept sd WHERE sd.dept_id=x.dept_id AND sd.del_flag='0'
+                    AND (sd.dept_id=actor.dept_id OR FIND_IN_SET(actor.dept_id,sd.ancestors))))
+                OR (r.data_scope='5' AND x.owner_id=actor.user_id))
+            )
+        </if>
+    </select>
+    <select id="rates" resultType="com.cfams.statistics.domain.vo.RateVO">
+        SELECT COUNT(*) periodAssetCount,
+        COALESCE(SUM(EXISTS(SELECT 1 FROM ca_borrow b WHERE b.asset_id=x.asset_id
+            AND b.actual_pickup_time &gt;= #{beginTime} AND b.actual_pickup_time &lt; #{endTime}
+            AND (1=0
+                <if test="unrestricted">OR 1=1</if>
+                <if test="allowedDeptIds != null and allowedDeptIds.size() > 0">
+                    OR b.asset_dept_id IN <foreach collection="allowedDeptIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+                </if>
+                <if test="selfUserId != null">OR b.applicant_user_id=#{selfUserId}</if>
+            ))),0) borrowedAssetCount,
+        COALESCE(SUM(EXISTS(SELECT 1 FROM ca_repair r WHERE r.asset_id=x.asset_id
+            AND r.accept_time &gt;= #{beginTime} AND r.accept_time &lt; #{endTime}
+            AND r.status IN ('1','2','3','4')
+            AND (1=0
+                <if test="unrestricted">OR 1=1</if>
+                <if test="allowedDeptIds != null and allowedDeptIds.size() > 0">
+                    OR r.asset_dept_id IN <foreach collection="allowedDeptIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+                </if>
+                <if test="selfUserId != null">OR r.reporter_user_id=#{selfUserId}</if>
+            ))),0) repairedAssetCount
+        FROM (SELECT asset_id,dept_id,keeper_user_id owner_id,category_id,location_id,purchase_date
+            FROM ca_asset WHERE registered_time &lt; #{endTime}
+            AND (scrapped_time IS NULL OR (scrapped_time &gt; #{beginTime} AND scrapped_time &gt; registered_time))) x
+        WHERE 1=1 <include refid="scope"/><include refid="assetFilters"/>
+    </select>
+    <!-- 每条事实只表示一次事件。费用单独按核验日期入账，禁止累计过程快照求和。 -->
+    <sql id="facts">
+        SELECT 'ASSET' kind,a.dept_id,a.keeper_user_id owner_id,a.category_id,a.location_id,a.purchase_date,
+        a.registered_time event_time,a.purchase_price amount,0 difference FROM ca_asset a
+        UNION ALL
+        SELECT 'BORROW',b.asset_dept_id,b.applicant_user_id,a.category_id,a.location_id,a.purchase_date,
+        b.actual_pickup_time,0,0 FROM ca_borrow b JOIN ca_asset a ON a.asset_id=b.asset_id
+        WHERE b.actual_pickup_time IS NOT NULL
+        UNION ALL
+        SELECT 'REPAIR',r.asset_dept_id,r.reporter_user_id,a.category_id,a.location_id,a.purchase_date,
+        r.accept_time,0,0 FROM ca_repair r JOIN ca_asset a ON a.asset_id=r.asset_id
+        WHERE r.accept_time IS NOT NULL AND r.status IN ('1','2','3','4')
+        UNION ALL
+        SELECT 'COST',r.asset_dept_id,r.reporter_user_id,a.category_id,a.location_id,a.purchase_date,
+        r.verify_time,COALESCE(r.repair_cost,0),0 FROM ca_repair r JOIN ca_asset a ON a.asset_id=r.asset_id
+        WHERE r.status='4' AND r.verify_time IS NOT NULL
+        UNION ALL
+        SELECT 'INVENTORY',t.dept_id,i.assigned_user_id,a.category_id,a.location_id,a.purchase_date,
+        i.checked_time,0,CASE WHEN i.missing_flag='1' OR i.observed_condition IN ('1','2')
+        OR (JSON_EXTRACT(i.base_snapshot,'$.location_id') IS NOT NULL
+            AND i.observed_location_id != CAST(JSON_UNQUOTE(JSON_EXTRACT(i.base_snapshot,'$.location_id')) AS UNSIGNED))
+        THEN 1 ELSE 0 END
+        FROM ca_inventory_item i JOIN ca_inventory_task t ON t.task_id=i.task_id
+        JOIN ca_asset a ON a.asset_id=i.asset_id WHERE i.checked_time IS NOT NULL
+        UNION ALL
+        SELECT 'SCRAP',s.asset_dept_id,s.applicant_user_id,a.category_id,a.location_id,a.purchase_date,
+        s.completed_time,0,0 FROM ca_scrap s JOIN ca_asset a ON a.asset_id=s.asset_id
+        WHERE s.status='3' AND s.completed_time IS NOT NULL
+    </sql>
+    <sql id="dimension">
+        <choose>
+            <when test="dimension == 'CATEGORY'">CONCAT(x.category_id,':',COALESCE(c.category_name,'未找到类别'))</when>
+            <when test="dimension == 'DEPARTMENT'">CONCAT(x.dept_id,':',COALESCE(d.dept_name,'未找到部门'))</when>
+            <otherwise>DATE_FORMAT(x.event_time,'%Y-%m')</otherwise>
+        </choose>
+    </sql>
+    <select id="reports" resultType="com.cfams.statistics.domain.vo.StatisticsRowVO">
+        SELECT <include refid="dimension"/> dimension,
+        SUM(x.kind='ASSET') assetCount,
+        SUM(CASE WHEN x.kind='ASSET' THEN x.amount ELSE 0 END) registeredValue,
+        SUM(x.kind='BORROW') borrowCount,SUM(x.kind='REPAIR') repairCount,
+        SUM(CASE WHEN x.kind='COST' THEN x.amount ELSE 0 END) repairCost,
+        SUM(x.kind='INVENTORY') inventoryCount,
+        SUM(CASE WHEN x.kind='INVENTORY' THEN x.difference ELSE 0 END) inventoryDifferenceCount,
+        SUM(x.kind='SCRAP') scrapCount
+        FROM (<include refid="facts"/>) x
+        LEFT JOIN ca_category c ON c.category_id=x.category_id LEFT JOIN sys_dept d ON d.dept_id=x.dept_id
+        WHERE x.event_time &gt;= #{beginTime} AND x.event_time &lt; #{endTime}
+        <include refid="scope"/><include refid="assetFilters"/>
+        <choose>
+            <when test="reportType == 'REPAIR'">AND x.kind IN ('REPAIR','COST')</when>
+            <when test="reportType != 'ALL'">AND x.kind=#{reportType}</when>
+        </choose>
+        GROUP BY <include refid="dimension"/> ORDER BY dimension
+    </select>
+</mapper>

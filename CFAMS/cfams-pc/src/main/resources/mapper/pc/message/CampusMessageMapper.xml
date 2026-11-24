@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.cfams.message.mapper.CampusMessageMapper">
+    <resultMap id="messageResult" type="com.cfams.common.entity.CampusMessage">
+        <id column="message_id" property="messageId"/>
+        <result column="message_type" property="messageType"/>
+        <result column="biz_type" property="bizType"/>
+        <result column="biz_id" property="bizId"/>
+        <result column="title" property="title"/>
+        <result column="content" property="content"/>
+        <result column="read_flag" property="readFlag"/>
+        <result column="read_time" property="readTime"/>
+        <result column="create_time" property="createTime"/>
+        <result column="receiver_user_id" property="receiverUserId"/>
+        <result column="event_key" property="eventKey"/>
+    </resultMap>
+    <sql id="columns">message_id,message_type,biz_type,biz_id,title,content,read_flag,read_time,create_time,receiver_user_id,event_key</sql>
+    <insert id="insert">
+        INSERT INTO ca_message(receiver_user_id,event_key,message_type,biz_type,biz_id,title,content,read_flag,create_time)
+        VALUES(#{receiver},#{eventKey},#{type},#{bizType},#{bizId},#{title},#{content},'0',NOW(3))
+        ON DUPLICATE KEY UPDATE event_key=VALUES(event_key)
+    </insert>
+    <select id="list" resultMap="messageResult">
+        SELECT <include refid="columns"/> FROM ca_message WHERE receiver_user_id=#{userId}
+        <if test="q.keyword != null and q.keyword != ''">AND title LIKE CONCAT('%',#{q.keyword},'%')</if>
+        <if test="q.status != null and q.status != ''">AND read_flag=#{q.status}</if>
+        <if test="q.messageType != null and q.messageType != ''">AND message_type=#{q.messageType}</if>
+        <if test="q.beginTime != null">AND create_time &gt;= #{q.beginTime}</if>
+        <if test="q.endTime != null">AND create_time &lt; #{q.endTime}</if>
+        ORDER BY message_id DESC
+    </select>
+    <select id="ownedCount" resultType="int">
+        SELECT COUNT(*) FROM ca_message WHERE receiver_user_id=#{userId} AND message_id IN
+        <foreach collection="ids" item="id" open="(" close=")" separator=",">#{id}</foreach>
+    </select>
+    <update id="markRead">
+        UPDATE ca_message SET read_flag='1',read_time=COALESCE(read_time,NOW(3))
+        WHERE receiver_user_id=#{userId} AND message_id IN
+        <foreach collection="ids" item="id" open="(" close=")" separator=",">#{id}</foreach>
+    </update>
+</mapper>

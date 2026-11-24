@@ -73,6 +73,8 @@
 	
 	<!-- 系统模块日志级别控制  -->
 	<logger name="com.cfams" level="info" />
+    <!-- 名册绑定SQL参数包含一次性凭据摘要，不启用该Mapper的DEBUG日志。 -->
+    <logger name="com.cfams.identity.mapper" level="info" />
 	<!-- Spring日志级别控制  -->
 	<logger name="org.springframework" level="warn" />
 

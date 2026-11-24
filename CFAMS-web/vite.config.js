@@ -2,11 +2,10 @@ import { defineConfig, loadEnv } from 'vite'
 import path from 'path'
 import createVitePlugins from './vite/plugins'
 
-const baseUrl = 'http://localhost:8081' // 后端接口
-
 // https://vitejs.dev/config/
 export default defineConfig(({ mode, command }) => {
   const env = loadEnv(mode, process.cwd())
+  const baseUrl = process.env.CFAMS_PROXY_TARGET || env.VITE_APP_PROXY_TARGET || 'http://localhost:8081'
   const { VITE_APP_ENV } = env
   return {
     // 部署生产环境和开发环境下的URL。

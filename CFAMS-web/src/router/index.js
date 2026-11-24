@@ -58,17 +58,14 @@ export const constantRoutes = [
     hidden: true
   },
   {
-    path: '',
+    path: '/',
     component: Layout,
-    redirect: '/index',
-    children: [
-      {
-        path: '/index',
-        component: () => import('@/views/index'),
-        name: 'Index',
-        meta: { title: '首页', icon: 'dashboard', affix: true }
-      }
-    ]
+    hidden: true
+  },
+  {
+    path: '/index',
+    redirect: '/',
+    hidden: true
   },
   {
     path: '/lock',

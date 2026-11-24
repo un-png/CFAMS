@@ -1,4 +1,2 @@
-/**
- * PC端业务通知，domain.dto层；仅预留目录，暂无业务实现。
- */
+/** PC端业务通知，domain.dto层。 */
 package com.cfams.message.domain.dto;

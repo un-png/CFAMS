@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.cfams.repair.mapper.CampusRepairMapper">
+  <sql id="select">SELECT r.*,a.asset_code,a.asset_name,u.nick_name reporter_name,p.nick_name repairer_name
+    FROM ca_repair r JOIN ca_asset a ON a.asset_id=r.asset_id
+    LEFT JOIN sys_user u ON u.user_id=r.reporter_user_id LEFT JOIN sys_user p ON p.user_id=r.repairer_user_id
+  </sql>
+  <select id="list" resultType="com.cfams.repair.domain.vo.RepairVO">
+    <include refid="select"/> WHERE 1=1
+    <if test="keyword != null and keyword != ''">AND (r.repair_no LIKE CONCAT('%',#{keyword},'%') OR a.asset_code LIKE CONCAT('%',#{keyword},'%') OR a.asset_name LIKE CONCAT('%',#{keyword},'%'))</if>
+    <if test="status != null and status != ''">AND r.status=#{status}</if>
+    <if test="deptId != null">AND r.asset_dept_id=#{deptId}</if>
+    <if test="categoryId != null">AND a.category_id=#{categoryId}</if>
+    <if test="locationId != null">AND a.location_id=#{locationId}</if>
+    <if test="faultType != null and faultType != ''">AND r.fault_type=#{faultType}</if>
+    <if test="repairer != null and repairer != ''">AND p.nick_name LIKE CONCAT('%',#{repairer},'%')</if>
+    <if test="beginTime != null">AND r.report_time &gt;= #{beginTime}</if>
+    <if test="endTime != null">AND r.report_time &lt;= #{endTime}</if>
+    AND (<choose><when test="unrestricted">1=1</when><otherwise>
+      1=0
+      <if test="allowedDeptIds != null and allowedDeptIds.size() > 0">OR r.asset_dept_id IN
+        <foreach collection="allowedDeptIds" item="d" open="(" separator="," close=")">#{d}</foreach>
+      </if>
+      <if test="selfUserId != null">OR r.reporter_user_id=#{selfUserId} OR r.repairer_user_id=#{selfUserId}</if>
+    </otherwise></choose>)
+    ORDER BY r.report_time DESC,r.repair_id DESC
+  </select>
+  <select id="find" resultType="com.cfams.repair.domain.vo.RepairVO"><include refid="select"/> WHERE r.repair_id=#{id}</select>
+    <select id="records" resultType="com.cfams.repair.domain.vo.RepairRecordVO">
+    SELECT r.*,u.nick_name operator_name FROM ca_repair_record r LEFT JOIN sys_user u ON u.user_id=r.operator_user_id
+    WHERE r.repair_id=#{id} ORDER BY r.action_time,r.record_id
+  </select>
+  <select id="qualifiedRepairer" resultType="int">
+    SELECT COUNT(*) FROM sys_user u WHERE u.user_id=#{id} AND u.status='0' AND u.del_flag='0'
+    AND EXISTS (SELECT 1 FROM sys_user_role ur JOIN sys_role r ON r.role_id=ur.role_id
+      JOIN sys_role_menu rm ON rm.role_id=r.role_id JOIN sys_menu m ON m.menu_id=rm.menu_id
+      WHERE ur.user_id=u.user_id AND r.status='0' AND r.del_flag='0' AND m.status='0'
+      AND m.perms='campus:repair:execute')
+  </select>
+    <update id="assign">
+    UPDATE ca_repair SET status=#{status},update_by=#{actor},update_time=NOW(3)
+    <if test='expected == "0"'>,accept_user_id=#{userId},accept_time=NOW(3),accept_opinion=#{opinion}</if>
+    <if test='status == "1"'>,repairer_user_id=#{repairer},assign_time=NOW(3)</if>
+    WHERE repair_id=#{id} AND status=#{expected}
+  </update>
+  <update id="verify">
+    UPDATE ca_repair SET status=#{status},update_by=#{actor},update_time=NOW(3)
+    <if test='status == "4"'>,verify_user_id=#{userId},verify_time=NOW(3),verify_opinion=#{opinion}</if>
+    WHERE repair_id=#{id} AND status='3'
+  </update>
+</mapper>

@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.cfams.borrow.mapper.CampusBorrowMapper">
+  <sql id="scope">
+    AND (<choose><when test="unrestricted">1=1</when><otherwise>
+      1=0
+      <if test="allowedDeptIds != null and allowedDeptIds.size() > 0">OR b.asset_dept_id IN
+        <foreach collection="allowedDeptIds" item="d" open="(" separator="," close=")">#{d}</foreach>
+      </if>
+      <if test="selfUserId != null">OR b.applicant_user_id=#{selfUserId}</if>
+    </otherwise></choose>)
+  </sql>
+  <sql id="filters">
+    <if test="keyword != null and keyword != ''">AND (b.borrow_no LIKE CONCAT('%',#{keyword},'%') OR a.asset_code LIKE CONCAT('%',#{keyword},'%') OR a.asset_name LIKE CONCAT('%',#{keyword},'%'))</if>
+    <if test="applicant != null and applicant != ''">AND u.nick_name LIKE CONCAT('%',#{applicant},'%')</if>
+    <if test="deptId != null">AND b.asset_dept_id=#{deptId}</if>
+    <if test="categoryId != null">AND a.category_id=#{categoryId}</if>
+    <if test="locationId != null">AND a.location_id=#{locationId}</if>
+    <if test="beginTime != null">AND b.apply_time &gt;= #{beginTime}</if>
+    <if test="endTime != null">AND b.apply_time &lt;= #{endTime}</if>
+    <include refid="scope"/>
+  </sql>
+  <sql id="borrowColumns">b.*, a.asset_code, a.asset_name, u.nick_name applicant_name</sql>
+  <sql id="joins">FROM ca_borrow b JOIN ca_asset a ON a.asset_id=b.asset_id LEFT JOIN sys_user u ON u.user_id=b.applicant_user_id</sql>
+  <select id="list" resultType="com.cfams.borrow.domain.vo.BorrowVO">
+    SELECT b.borrow_id,b.borrow_no,b.asset_id,b.asset_dept_id,b.applicant_user_id,b.purpose,
+    b.planned_start_time,b.planned_end_time,b.status,b.apply_time,b.audit_user_id,b.audit_time,b.audit_opinion,
+    b.actual_pickup_time,b.actual_return_time,b.cancel_user_id,b.cancel_time,b.cancel_reason,
+    a.asset_code,a.asset_name,u.nick_name applicant_name
+    <include refid="joins"/> WHERE 1=1 <include refid="filters"/>
+    <if test="status != null and status != ''">AND b.status=#{status}</if>
+    <if test="timing == 'overdue'">AND b.status IN ('3','4') AND b.planned_end_time &lt; NOW(3)</if>
+    <if test="timing == 'dueSoon'">AND b.status IN ('3','4') AND b.planned_end_time BETWEEN NOW(3) AND DATE_ADD(NOW(3), INTERVAL #{remindHours} HOUR)</if>
+    ORDER BY b.apply_time DESC,b.borrow_id DESC
+  </select>
+  <select id="find" resultType="com.cfams.borrow.domain.vo.BorrowVO">SELECT <include refid="borrowColumns"/> <include refid="joins"/> WHERE b.borrow_id=#{id}</select>
+  <select id="reminderCandidates" resultType="com.cfams.borrow.domain.vo.BorrowVO">
+    SELECT b.borrow_id,b.asset_id <include refid="joins"/>
+    WHERE b.status IN ('3','4') AND b.planned_end_time &lt;= DATE_ADD(NOW(3),INTERVAL #{remindHours} HOUR)
+    AND NOT EXISTS (SELECT 1 FROM ca_message m WHERE m.receiver_user_id=b.applicant_user_id
+      AND m.event_key=CONCAT('BORROW:',b.borrow_id,':',IF(b.planned_end_time &lt; NOW(3),'OVERDUE','DUE_SOON')))
+    <include refid="scope"/>
+    ORDER BY b.planned_end_time,b.borrow_id LIMIT 100
+  </select>
+<sql id="handoverColumns">h.*,b.asset_id,b.asset_dept_id,b.applicant_user_id,b.borrow_no,a.asset_name,u.nick_name applicant_name</sql>
+  <sql id="handoverJoins">FROM ca_handover h JOIN ca_borrow b ON b.borrow_id=h.borrow_id JOIN ca_asset a ON a.asset_id=b.asset_id LEFT JOIN sys_user u ON u.user_id=b.applicant_user_id</sql>
+  <select id="handovers" resultType="com.cfams.borrow.domain.vo.HandoverVO">
+    SELECT <include refid="handoverColumns"/> <include refid="handoverJoins"/> WHERE 1=1 <include refid="filters"/>
+    <if test="status != null and status != ''">AND h.status=#{status}</if>
+    <if test="handoverType != null and handoverType != ''">AND h.handover_type=#{handoverType}</if>
+    ORDER BY h.request_time DESC,h.handover_id DESC
+  </select>
+  <select id="handover" resultType="com.cfams.borrow.domain.vo.HandoverVO">SELECT <include refid="handoverColumns"/> <include refid="handoverJoins"/> WHERE h.handover_id=#{id}</select>
+    <select id="conflicts" resultType="int">
+    SELECT COUNT(*) FROM ca_borrow WHERE asset_id=#{assetId} AND borrow_id != #{borrowId}
+    AND ((status IN ('2','3','4') AND planned_start_time &lt; #{plannedEndTime} AND planned_end_time &gt; #{plannedStartTime})
+    OR (status IN ('3','4') AND planned_end_time &lt;= NOW(3)))
+  </select>
+    <update id="transition">
+    UPDATE ca_borrow SET status=#{status},update_by=#{actor},update_time=NOW(3)
+    <if test='expected == "2" and status == "3"'>,actual_pickup_time=NOW(3)</if>
+    <if test='status == "5"'>,actual_return_time=NOW(3)</if>
+    WHERE borrow_id=#{id} AND status=#{expected}
+  </update>
+</mapper>

@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.cfams.attachment.mapper.CampusAttachmentMapper">
+    <resultMap id="attachmentResult" type="com.cfams.common.entity.CampusAttachment">
+        <id column="attachment_id" property="attachmentId"/>
+        <result column="biz_type" property="bizType"/>
+        <result column="biz_id" property="bizId"/>
+        <result column="file_name" property="fileName"/>
+        <result column="bucket_name" property="bucketName"/>
+        <result column="object_key" property="objectKey"/>
+        <result column="content_type" property="contentType"/>
+        <result column="file_size" property="fileSize"/>
+        <result column="sort_num" property="sortNum"/>
+        <result column="uploader_user_id" property="uploaderUserId"/>
+        <result column="upload_time" property="uploadTime"/>
+    </resultMap>
+    <sql id="columns">attachment_id,biz_type,biz_id,file_name,bucket_name,object_key,content_type,file_size,sort_num,uploader_user_id,upload_time</sql>
+    <resultMap id="attachmentTarget" type="com.cfams.attachment.domain.vo.AttachmentTargetVO">
+        <result column="asset_id" property="assetId"/>
+        <result column="dept_id" property="deptId"/>
+        <result column="owner_id" property="ownerId"/>
+        <result column="status" property="status"/>
+    </resultMap>
+    <select id="target" resultMap="attachmentTarget" flushCache="true" useCache="false">
+        <choose>
+            <when test="type == 'ASSET'">SELECT asset_id,dept_id,keeper_user_id AS owner_id,asset_status AS status FROM ca_asset WHERE asset_id=#{id}</when>
+            <when test="type == 'SCRAP'">SELECT asset_id,asset_dept_id AS dept_id,applicant_user_id AS owner_id,status FROM ca_scrap WHERE scrap_id=#{id}</when>
+            <when test="type == 'REPAIR'">SELECT asset_id,asset_dept_id AS dept_id,reporter_user_id AS owner_id,status FROM ca_repair WHERE repair_id=#{id}</when>
+            <when test="type == 'REPAIR_RECORD'">
+                SELECT r.asset_id,r.asset_dept_id AS dept_id,r.reporter_user_id AS owner_id,r.status FROM ca_repair r
+                JOIN ca_repair_record p ON p.repair_id=r.repair_id WHERE p.record_id=#{id}
+            </when>
+            <when test="type == 'INVENTORY_ITEM'">
+                SELECT i.asset_id,t.dept_id,i.assigned_user_id AS owner_id,t.status FROM ca_inventory_item i
+                JOIN ca_inventory_task t ON t.task_id=i.task_id WHERE i.item_id=#{id}
+            </when>
+            <otherwise>SELECT asset_id,dept_id,keeper_user_id AS owner_id,asset_status AS status FROM ca_asset WHERE 1=0</otherwise>
+        </choose>
+    </select>
+</mapper>

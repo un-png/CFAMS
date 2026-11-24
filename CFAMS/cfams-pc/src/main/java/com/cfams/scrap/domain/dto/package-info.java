@@ -1,4 +1,4 @@
 /**
- * PC端报废处置，domain.dto层；仅预留目录，暂无业务实现。
+ * 报废请求及查询参数。
  */
 package com.cfams.scrap.domain.dto;

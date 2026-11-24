@@ -1,5 +1,23 @@
 # CFAMS-web
 
+## 校园PC页面
+
+校园页面位于`src/views/campus/<业务>/index.vue`，19个页面独立实现，使用若依的行内查询、`el-row`工具栏、`right-toolbar`、`pagination`、`el-dialog`及`v-hasPermi`。每个页面直接定义自己的字段、表单校验和业务方法，不再使用BusinessPage/pages/contracts配置式业务页面。
+
+接口按业务放在`src/api/campus/assets.js`、`people.js`、`borrow.js`、`repair.js`、`inventory.js`、`scrap.js`等文件；仅共享`options.js`授权选项、`attachment.js`附件及`files.js`文件传输。页面使用后端实际字段名，明确构建写入DTO。下拉选项使用`/campus/options/{type}`；资产和报废保存后上传附件，失败可重试而不重复创建主记录。二维码使用鉴权PNG，Excel导入导出使用既有真实文件接口。小程序不在本轮范围。
+
+原若依首页已移除。`CFAMS/sql/06_统计分析菜单置顶.sql`已在本机执行，将统计分析目录排到第一位且保留其显示、停用及授权设置。登录和旧`/index`入口默认进入第一个可见授权页面；统计菜单被隐藏、停用或未授权时自动回退，完全没有可见菜单时进入个人中心。菜单顺序仍由若依菜单管理控制。
+
+菜单采用若依原生动态菜单。已有系统库执行后端`CFAMS/sql/05_校园PC菜单与权限.sql`后，在“菜单管理”配置显示、隐藏和停用，在“角色管理”分配页面及按钮权限。该脚本预留3000起的菜单ID，执行前核对目标库是否占用；当前本机库已经安装，不需重复初始化。普通角色不自动获得校园菜单权限。
+
+隐藏仅影响侧栏显示，停用后重新加载路由不再提供该页面；配置变更后重新登录。权限前缀为`campus:<页面key>:<动作>`，报废初审与复审分别授权。业务API已执行服务端权限、账号有效性和数据范围校验。
+
+实际菜单由`/getRouters`返回。由于本轮只改前端，数据库中原有的`campus/BusinessPage`、`campus/Dashboard`组件值由`store/modules/permission.js`中的`resolveCampusView`映射到独立页面；角色、菜单顺序、隐藏与停用仍以服务端返回为准。后续可将菜单组件直接改为`campus/assets/index`等真实路径，前端也能按若依原方式加载。
+
+页面目录：`dashboard`、`reports`、`assets`、`labels`、`people`、`binding`、`categories`、`locations`、`borrow`、`handover`、`borrowRecords`、`repairs`、`repairVerify`、`repairRecords`、`inventory`、`inventoryReview`、`scrap`、`scrapAudit`、`messages`。例如修改资产台账只需查看`views/campus/assets/index.vue`和`api/campus/assets.js`。
+
+Vite代理默认8081，可用本地环境变量`VITE_APP_PROXY_TARGET`切换专用联调服务。2026-11-23重构的浏览器检查使用模拟响应验证页面、请求和权限按钮，不代表重新执行真实后端流程；后端和数据库本轮未变更。
+
 
 <p align="center">
 	<img alt="logo" src="https://oscimg.oschina.net/oscnet/up-d3d0a9303e11d522a06cd263f3079027715.png">

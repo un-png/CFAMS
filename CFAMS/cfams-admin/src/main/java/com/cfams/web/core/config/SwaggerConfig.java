@@ -46,14 +46,14 @@ public class SwaggerConfig
             .scheme("Bearer");
     }
     
-    /**
+    /**w
      * 添加摘要信息
      */
     public Info getApiInfo()
     {
         return new Info()
             // 设置标题
-            .title("标题：若依管理系统_接口文档")
+            .title("标题：校园固定资产管理系统_接口文档")
             // 描述
             .description("描述：用于管理集团旗下公司的人员信息,具体包括XXX,XXX模块...")
             // 作者信息

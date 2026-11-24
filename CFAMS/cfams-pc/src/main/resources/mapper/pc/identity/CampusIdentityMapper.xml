@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.cfams.identity.mapper.CampusIdentityMapper">
+    <sql id="columns">
+        p.person_id personId,p.person_no personNo,p.person_type personType,p.real_name realName,
+        p.dept_id deptId,d.dept_name deptName,p.user_id userId,u.user_name userName,p.status,
+        p.remark,p.create_time createTime,
+        CASE WHEN p.status='1' OR u.status='1' OR u.del_flag='2' THEN 'DISABLED'
+        WHEN EXISTS(SELECT 1 FROM ca_wx_binding w WHERE w.user_id=p.user_id AND w.status='0') THEN 'BOUND'
+        ELSE 'UNBOUND' END bindingState
+    </sql>
+    <sql id="joins">
+        FROM ca_person p LEFT JOIN sys_dept d ON d.dept_id=p.dept_id
+        LEFT JOIN sys_user u ON u.user_id=p.user_id
+    </sql>
+    <sql id="scope">
+        AND (1=0
+        <if test="unrestricted">OR 1=1</if>
+        <if test="allowedDeptIds != null and allowedDeptIds.size() > 0">
+            OR p.dept_id IN <foreach collection="allowedDeptIds" item="d" open="(" separator="," close=")">#{d}</foreach>
+        </if>
+        <if test="selfUserId != null">OR p.user_id=#{selfUserId}</if>)
+    </sql>
+    <sql id="filters">
+        <include refid="scope"/>
+        <if test="keyword != null and keyword != ''">AND (p.person_no LIKE CONCAT('%',#{keyword},'%') OR p.real_name LIKE CONCAT('%',#{keyword},'%'))</if>
+        <if test="deptId != null">AND p.dept_id=#{deptId}</if>
+        <if test="personType != null and personType != ''">AND p.person_type=#{personType}</if>
+        <if test="status != null and status != ''">AND p.status=#{status}</if>
+        <if test="bindingState != null and bindingState != ''">
+            AND (CASE WHEN p.status='1' OR u.status='1' OR u.del_flag='2' THEN 'DISABLED'
+            WHEN EXISTS(SELECT 1 FROM ca_wx_binding w WHERE w.user_id=p.user_id AND w.status='0') THEN 'BOUND'
+            ELSE 'UNBOUND' END)=#{bindingState}
+        </if>
+    </sql>
+    <select id="people" resultType="com.cfams.identity.domain.vo.PersonVO">
+        SELECT <include refid="columns"/> <include refid="joins"/> WHERE 1=1
+        <include refid="filters"/> ORDER BY p.person_id DESC
+    </select>
+    <select id="bindings" resultType="com.cfams.identity.domain.vo.BindingVO">
+        SELECT <include refid="columns"/>,b.binding_id bindingId,b.appid,b.status bindingStatus,
+        b.bind_time bindTime,b.last_login_time lastLoginTime
+        <include refid="joins"/> LEFT JOIN ca_wx_binding b ON b.user_id=p.user_id WHERE 1=1
+        <include refid="filters"/> ORDER BY p.person_id DESC,b.binding_id
+    </select>
+    <select id="person" resultType="com.cfams.identity.domain.vo.PersonVO">
+        SELECT <include refid="columns"/> <include refid="joins"/> WHERE p.person_id=#{id}
+        
+    </select>
+    <select id="duplicate" resultType="int">
+        SELECT COUNT(*) FROM ca_person WHERE (person_no=#{p.personNo}
+        <if test="p.userId != null">OR user_id=#{p.userId}</if>)
+        <if test="id != null">AND person_id != #{id}</if>
+    </select>
+</mapper>

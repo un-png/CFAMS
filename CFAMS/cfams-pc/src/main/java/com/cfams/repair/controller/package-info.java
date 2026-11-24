@@ -1,4 +1,2 @@
-/**
- * PC端报修维修，controller层；仅预留目录，暂无业务实现。
- */
+/** PC端报修维修，controller层。 */
 package com.cfams.repair.controller;

@@ -1,8 +1,16 @@
 # CFAMS
 
+已删除混合职责的`campus/core`包。资产状态、快照和履历由`asset/service/CampusAssetStateService`及`service/impl/CampusAssetStateServiceImpl`实现，SQL并入已有`asset/mapper/CampusAssetMapper`；状态投影为`asset/domain/vo/AssetStateVO`。权限服务在`campus/service`与`service/impl`，权限和选项Mapper在`campus/mapper`，公共查询DTO和选项VO在`campus/domain/dto`、`campus/domain/vo`。对应权限和选项XML位于`mapper/pc/campus`，不再保留`mapper/pc/core`。
+
+校园业务Controller、ServiceImpl、权限切面及协调服务统一使用`@Autowired`字段注入，与若依原有风格一致。注入字段名统一使用类型名首字母小写，例如`CampusRepairMapper campusRepairMapper`、`CampusAccessService campusAccessService`，不使用mapper、access、service等缩写。依赖注入后需要初始化的提醒事务模板在`@PostConstruct`中建立；实体、DTO、VO的数据构造器不受影响。
+
 当前后端使用JDK 21，Maven父工程为`com.cfams:cfams`。模块统一命名为`cfams-admin`、`cfams-common`、`cfams-framework`、`cfams-system`、`cfams-pc`、`cfams-app`，基础包为`com.cfams`。以`com.cfams.CfamsApplication`启动，构建产物为`cfams-admin/target/cfams-admin.jar`。
 
-PC和小程序的功能包都直接位于各自模块的`com.cfams`下，按业务包内的`controller`、`domain/dto`、`domain/vo`、`mapper`、`service/impl`组织代码。PC已建立11个功能包，小程序已建立9个功能包，均只有`package-info.java`占位文件，尚未实现校园业务接口。两端具体类需采用不同类名，避免同一后端中全限定类名冲突。完整项目结构及开发方式见仓库根目录README；以下保留若依来源说明。
+SQL约定：简单固定单表操作写在Mapper的`@Select/@Insert/@Update/@Delete`；动态筛选、多表关联、批量及复杂SQL保留XML，不重复定义。同业务查询已移除`FOR UPDATE`，保留原有事务和状态条件更新。不同业务单据并发检查不再由查询行锁串行保护。
+
+PC和小程序的功能包都直接位于各自模块的`com.cfams`下。PC校园业务的Controller、Service接口、ServiceImpl、DTO、VO和Mapper已归入`cfams-pc`对应业务包，XML在该模块`resources/mapper/pc/业务`，17个共享表实体仍位于`cfams-common/com/cfams/common/entity`。`cfams-system`仅保留若依系统能力。校园权限切面也位于PC模块，避免框架反向依赖PC。DTO保留明确可写字段，VO承载查询结果；身份绑定敏感字段不输出到普通列表。
+
+业务代码使用普通JavaBean和常规控制流，实体、DTO、VO统一由Lombok `@Getter`、`@Setter`生成属性访问方法，显式业务方法和构造器说明用途。命名按业务与动作区分，如`AssetQueryDTO`查询、`AssetSaveDTO`保存、`BorrowAuditDTO`审核、`HandoverConfirmDTO`交接、`AssetImportResultVO`导入结果。JDK 21配置保持不变，不使用record、var、箭头switch和instanceof模式变量。小程序仅保留Maven模块，空的占位包已清理；以下保留若依来源说明。
 
 
 <p align="center">

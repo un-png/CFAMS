@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.cfams.scrap.mapper.CampusScrapMapper">
+    <sql id="columns">
+        s.scrap_id AS scrapId, s.scrap_no AS scrapNo, s.asset_id AS assetId,
+        s.asset_dept_id AS assetDeptId, s.applicant_user_id AS applicantUserId,
+        s.dispose_type AS disposeType, s.reason, s.apply_time AS applyTime,
+        s.status, s.completed_time AS completedTime, s.create_by AS createBy
+    </sql>
+    <sql id="scope">
+        AND (
+          #{unrestricted} = TRUE
+          <if test="allowedDeptIds != null and !allowedDeptIds.isEmpty()">
+              OR s.asset_dept_id IN
+              <foreach collection="allowedDeptIds" item="dept" open="(" separator="," close=")">#{dept}</foreach>
+          </if>
+          OR s.applicant_user_id = #{selfUserId}
+        )
+    </sql>
+    <select id="list" resultType="com.cfams.scrap.domain.vo.ScrapVO">
+        SELECT <include refid="columns"/>, a.asset_code AS assetCode, a.asset_name AS assetName,
+               d.dept_name AS deptName, u.nick_name AS applicantName
+        FROM ca_scrap s JOIN ca_asset a ON a.asset_id = s.asset_id
+        LEFT JOIN sys_dept d ON d.dept_id = s.asset_dept_id
+        LEFT JOIN sys_user u ON u.user_id = s.applicant_user_id
+        WHERE 1=1 <include refid="scope"/>
+        <if test="keyword != null and keyword != ''">
+            AND (s.scrap_no LIKE CONCAT('%',#{keyword},'%') OR a.asset_code LIKE CONCAT('%',#{keyword},'%')
+                 OR a.asset_name LIKE CONCAT('%',#{keyword},'%'))
+        </if>
+        <if test="status != null and status != ''">AND s.status = #{status}</if>
+        <if test="handled != null and handled">AND s.status IN ('2','3')</if>
+        <if test="disposeType != null and disposeType != ''">AND s.dispose_type=#{disposeType}</if>
+        <if test="deptId != null">AND s.asset_dept_id = #{deptId}</if>
+        <if test="applicant != null and applicant != ''">AND u.nick_name LIKE CONCAT('%',#{applicant},'%')</if>
+        <if test="beginTime != null">AND s.apply_time &gt;= #{beginTime}</if>
+        <if test="endTime != null">AND s.apply_time &lt;= #{endTime}</if>
+        ORDER BY s.scrap_id DESC
+    </select>
+    <select id="detail" resultType="com.cfams.scrap.domain.vo.ScrapVO">
+        SELECT <include refid="columns"/>, a.asset_code AS assetCode, a.asset_name AS assetName,
+               d.dept_name AS deptName, u.nick_name AS applicantName
+        FROM ca_scrap s JOIN ca_asset a ON a.asset_id = s.asset_id
+        LEFT JOIN sys_dept d ON d.dept_id = s.asset_dept_id
+        LEFT JOIN sys_user u ON u.user_id = s.applicant_user_id WHERE s.scrap_id = #{id}
+    </select>
+<!-- 当前读避免事务内早期查询的快照漏掉刚提交的冲突业务。 -->
+    <select id="pendingScrap" resultType="int">
+        SELECT COUNT(*) FROM ca_scrap WHERE asset_id=#{assetId} AND status IN ('0','1')
+        <if test="excludeId != null">AND scrap_id != #{excludeId}</if>
+        
+    </select>
+    <select id="audits" resultType="com.cfams.scrap.domain.vo.ScrapAuditVO">
+        SELECT a.audit_id AS auditId,a.scrap_id AS scrapId,a.audit_level AS auditLevel,
+               a.audit_result AS auditResult,a.auditor_user_id AS auditorUserId,
+               u.nick_name AS auditorName,a.audit_opinion AS auditOpinion,a.audit_time AS auditTime
+        FROM ca_scrap_audit a LEFT JOIN sys_user u ON u.user_id=a.auditor_user_id
+        WHERE a.scrap_id=#{id} ORDER BY a.audit_level
+    </select>
+    <update id="transition">
+        UPDATE ca_scrap SET status=#{status},update_by=#{operator},update_time=NOW(3),
+            completed_time=CASE WHEN #{status}='3' THEN NOW(3) ELSE completed_time END
+        WHERE scrap_id=#{id} AND status=#{expected}
+    </update>
+</mapper>
